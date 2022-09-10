@@ -1,2 +1,5 @@
-# devbg-gatling
-Gatling performance and load testing
+# Gatling (Java)
+Performance and Load testing for REST apis
+
+## Running tests:
+``mvn clean gatling:test``

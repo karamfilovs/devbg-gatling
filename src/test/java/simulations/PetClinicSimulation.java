@@ -25,14 +25,21 @@ public class PetClinicSimulation extends Simulation {
             Stream.generate((Supplier<Map<String, Object>>) ()
                     -> Collections.singletonMap("firstName", RandomString.get().randomAlpha(10))
             ).iterator();
+    private static final Duration DURATION = Duration.ofSeconds(Long.parseLong(System.getProperty("duration", "1")));
+    private static final Long USERS = Long.parseLong(System.getProperty("users", "1"));
+    private static final String USERNAME = System.getProperty("username", "admin");
+    private static final String PASSWORD = System.getProperty("password", "admin");
+    private static final String BASE_URL = System.getProperty("baseUrl", "http://localhost:9966");
 
+
+
+    //Define http protocol for all requests
     HttpProtocolBuilder httpProtocol = HttpDsl.http
-            .baseUrl("http://localhost:9966")
+            .baseUrl(BASE_URL)
             .acceptHeader("application/json")
             .contentTypeHeader("application/json")
-            .basicAuth("admin", "admin")
+            .basicAuth(USERNAME, PASSWORD)
             .userAgentHeader("Gatling/Performance Test");
-
 
 
     ChainBuilder getOwnersReq = CoreDsl.exec(http("Get owners")
@@ -79,8 +86,8 @@ public class PetClinicSimulation extends Simulation {
 
 
     public PetClinicSimulation() {
-        this.setUp(createOwnerScenario.injectOpen(constantUsersPerSec(3).during(Duration.ofSeconds(1))),
-                        getOwnersScn.injectOpen(constantUsersPerSec(1).during(Duration.ofSeconds(1))))
+        this.setUp(createOwnerScenario.injectOpen(constantUsersPerSec(USERS).during(DURATION)),
+                        getOwnersScn.injectOpen(constantUsersPerSec(USERS).during(DURATION)))
                 .protocols(httpProtocol);
     }
 
