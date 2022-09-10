@@ -4,18 +4,13 @@ package simulations;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import dto.Owner;
-import io.gatling.javaapi.core.ChainBuilder;
-import io.gatling.javaapi.core.CoreDsl;
-import io.gatling.javaapi.core.ScenarioBuilder;
-import io.gatling.javaapi.core.Simulation;
+import io.gatling.javaapi.core.*;
 import io.gatling.javaapi.http.HttpDsl;
 import io.gatling.javaapi.http.HttpProtocolBuilder;
+import jodd.util.RandomString;
 
 import java.time.Duration;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -24,7 +19,12 @@ import static io.gatling.javaapi.http.HttpDsl.*;
 
 public class PetClinicSimulation extends Simulation {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-
+    private static final String OWNERS_ENDPOINT = "/petclinic/api/owners";
+    private static final String VETS_ENDPOINT = "/petclinic/api/vets";
+    private  Iterator<Map<String, Object>> firstNameFeeder =
+            Stream.generate((Supplier<Map<String, Object>>) ()
+                    -> Collections.singletonMap("firstName", RandomString.get().randomAlpha(10))
+            ).iterator();
 
     HttpProtocolBuilder httpProtocol = HttpDsl.http
             .baseUrl("http://localhost:9966")
@@ -33,29 +33,27 @@ public class PetClinicSimulation extends Simulation {
             .basicAuth("admin", "admin")
             .userAgentHeader("Gatling/Performance Test");
 
-    Iterator<Map<String, Object>> feeder =
-            Stream.generate((Supplier<Map<String, Object>>) ()
-                    -> Collections.singletonMap("username", UUID.randomUUID().toString())
-            ).iterator();
+
 
     ChainBuilder getOwnersReq = CoreDsl.exec(http("Get owners")
-            .get("/petclinic/api/owners"));
+            .get(OWNERS_ENDPOINT));
 
 
-    ChainBuilder createOwnerReq = CoreDsl.exec(http("Create owner")
-            .post("/petclinic/api/owners").
-            body(StringBody(GSON.toJson(Owner.builder()
-                    .firstName("Alex")
-                    .lastName("Karamfilov")
-                    .telephone("1231234123")
-                    .city("Sofia")
-                    .address("Stranski street")
+    ChainBuilder createOwnerReq = CoreDsl.feed(csv("data/owners.csv").circular())
+            .exec(http("Create owner")
+            .post(OWNERS_ENDPOINT)
+                    .body(StringBody(GSON.toJson(Owner.builder()
+                    .firstName("#{firstName}")
+                    .lastName("#{lastName}")
+                    .telephone("#{telephone}")
+                    .city("#{city}")
+                    .address("#{address}")
                     .build())))
             .check(status().is(201))
             .check(jsonPath("$.id").saveAs("ownerId")));
 
     ChainBuilder updateOwnerReq = CoreDsl.exec(http("Update owner")
-            .put("/petclinic/api/owners/#{ownerId}").
+            .put(OWNERS_ENDPOINT + "/#{ownerId}").
             body(StringBody(GSON.toJson(Owner.builder()
                     .firstName("Alex")
                     .lastName("Updated")
@@ -66,11 +64,12 @@ public class PetClinicSimulation extends Simulation {
             .check(status().is(204)));
 
     ChainBuilder getLatestOwnerReq = CoreDsl.exec(http("Get latest owner")
-            .get("/petclinic/api/owners/#{ownerId}")
-            .check(status().is(200)));
+            .get(OWNERS_ENDPOINT + "/#{ownerId}")
+            .check(status().is(200))
+            .check(responseTimeInMillis().lt(100)));
 
     ChainBuilder deleteOwnerReq = CoreDsl.exec(http("Delete latest owner")
-            .delete("/petclinic/api/owners/#{ownerId}"));
+            .delete(OWNERS_ENDPOINT + "/#{ownerId}"));
 
     ScenarioBuilder getOwnersScn = CoreDsl.scenario("Get owners")
             .exec(getOwnersReq);
@@ -78,19 +77,6 @@ public class PetClinicSimulation extends Simulation {
     ScenarioBuilder createOwnerScenario = CoreDsl.scenario("Create owner")
             .exec(createOwnerReq, updateOwnerReq, getLatestOwnerReq, deleteOwnerReq);
 
-    ScenarioBuilder scn = CoreDsl.scenario("Load Test Creating Customers")
-            .feed(feeder)
-            .exec(http("create-customer-request")
-                    .post("/api/customers")
-                    .header("Content-Type", "application/json")
-                    .body(StringBody("{ \"username\": \"#{username}\" }"))
-                    .check(status().is(201))
-                    .check(header("Location").saveAs("location"))
-            )
-            .exec(http("get-customer-request")
-                    .get(session -> session.getString("location"))
-                    .check(status().is(200))
-            );
 
     public PetClinicSimulation() {
         this.setUp(createOwnerScenario.injectOpen(constantUsersPerSec(3).during(Duration.ofSeconds(1))),
