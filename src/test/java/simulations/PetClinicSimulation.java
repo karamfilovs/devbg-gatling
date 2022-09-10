@@ -19,8 +19,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
-import static io.gatling.javaapi.core.CoreDsl.StringBody;
-import static io.gatling.javaapi.core.CoreDsl.constantUsersPerSec;
+import static io.gatling.javaapi.core.CoreDsl.*;
 import static io.gatling.javaapi.http.HttpDsl.*;
 
 public class PetClinicSimulation extends Simulation {
@@ -53,24 +52,31 @@ public class PetClinicSimulation extends Simulation {
                     .address("Stranski street")
                     .build())))
             .check(status().is(201))
-            .check());
+            .check(jsonPath("$.id").saveAs("ownerId")));
 
-    ChainBuilder updateOwner = CoreDsl.exec(http("Update owner")
+    ChainBuilder updateOwnerReq = CoreDsl.exec(http("Update owner")
             .put("/petclinic/api/owners/#{ownerId}").
             body(StringBody(GSON.toJson(Owner.builder()
                     .firstName("Alex")
-                    .lastName("Karamfilov")
+                    .lastName("Updated")
                     .telephone("1231234123")
                     .city("Sofia")
                     .address("Stranski street")
                     .build())))
-            .check(status().is(201)));
+            .check(status().is(204)));
+
+    ChainBuilder getLatestOwnerReq = CoreDsl.exec(http("Get latest owner")
+            .get("/petclinic/api/owners/#{ownerId}")
+            .check(status().is(200)));
+
+    ChainBuilder deleteOwnerReq = CoreDsl.exec(http("Delete latest owner")
+            .delete("/petclinic/api/owners/#{ownerId}"));
 
     ScenarioBuilder getOwnersScn = CoreDsl.scenario("Get owners")
             .exec(getOwnersReq);
 
     ScenarioBuilder createOwnerScenario = CoreDsl.scenario("Create owner")
-            .exec(createOwnerReq);
+            .exec(createOwnerReq, updateOwnerReq, getLatestOwnerReq, deleteOwnerReq);
 
     ScenarioBuilder scn = CoreDsl.scenario("Load Test Creating Customers")
             .feed(feeder)
@@ -87,7 +93,7 @@ public class PetClinicSimulation extends Simulation {
             );
 
     public PetClinicSimulation() {
-        this.setUp(createOwnerScenario.injectOpen(constantUsersPerSec(1).during(Duration.ofSeconds(1))),
+        this.setUp(createOwnerScenario.injectOpen(constantUsersPerSec(3).during(Duration.ofSeconds(1))),
                         getOwnersScn.injectOpen(constantUsersPerSec(1).during(Duration.ofSeconds(1))))
                 .protocols(httpProtocol);
     }
