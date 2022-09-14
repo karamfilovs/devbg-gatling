@@ -4,33 +4,33 @@ package simulations;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import dto.Owner;
-import io.gatling.javaapi.core.*;
+import io.gatling.javaapi.core.ChainBuilder;
+import io.gatling.javaapi.core.CoreDsl;
+import io.gatling.javaapi.core.ScenarioBuilder;
+import io.gatling.javaapi.core.Simulation;
 import io.gatling.javaapi.http.HttpDsl;
 import io.gatling.javaapi.http.HttpProtocolBuilder;
 import jodd.util.RandomString;
 
-import java.time.Duration;
-import java.util.*;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static io.gatling.javaapi.core.CoreDsl.*;
-import static io.gatling.javaapi.http.HttpDsl.*;
+import static io.gatling.javaapi.http.HttpDsl.http;
+import static io.gatling.javaapi.http.HttpDsl.status;
+import static utils.Config.*;
 
-public class PetClinicSimulation extends Simulation {
+public class OwnersSimulation extends Simulation {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String OWNERS_ENDPOINT = "/petclinic/api/owners";
-    private static final String VETS_ENDPOINT = "/petclinic/api/vets";
-    private  Iterator<Map<String, Object>> firstNameFeeder =
+
+    private Iterator<Map<String, Object>> firstNameFeeder =
             Stream.generate((Supplier<Map<String, Object>>) ()
                     -> Collections.singletonMap("firstName", RandomString.get().randomAlpha(10))
             ).iterator();
-    private static final Duration DURATION = Duration.ofSeconds(Long.parseLong(System.getProperty("duration", "1")));
-    private static final Long USERS = Long.parseLong(System.getProperty("users", "1"));
-    private static final String USERNAME = System.getProperty("username", "admin");
-    private static final String PASSWORD = System.getProperty("password", "admin");
-    private static final String BASE_URL = System.getProperty("baseUrl", "http://localhost:9966");
-
 
 
     //Define http protocol for all requests
@@ -48,16 +48,16 @@ public class PetClinicSimulation extends Simulation {
 
     ChainBuilder createOwnerReq = CoreDsl.feed(csv("data/owners.csv").circular())
             .exec(http("Create owner")
-            .post(OWNERS_ENDPOINT)
+                    .post(OWNERS_ENDPOINT)
                     .body(StringBody(GSON.toJson(Owner.builder()
-                    .firstName("#{firstName}")
-                    .lastName("#{lastName}")
-                    .telephone("#{telephone}")
-                    .city("#{city}")
-                    .address("#{address}")
-                    .build())))
-            .check(status().is(201))
-            .check(jsonPath("$.id").saveAs("ownerId")));
+                            .firstName("#{firstName}")
+                            .lastName("#{lastName}")
+                            .telephone("#{telephone}")
+                            .city("#{city}")
+                            .address("#{address}")
+                            .build())))
+                    .check(status().is(201))
+                    .check(jsonPath("$.id").saveAs("ownerId")));
 
     ChainBuilder updateOwnerReq = CoreDsl.exec(http("Update owner")
             .put(OWNERS_ENDPOINT + "/#{ownerId}").
@@ -85,7 +85,7 @@ public class PetClinicSimulation extends Simulation {
             .exec(createOwnerReq, updateOwnerReq, getLatestOwnerReq, deleteOwnerReq);
 
 
-    public PetClinicSimulation() {
+    public OwnersSimulation() {
         this.setUp(createOwnerScenario.injectOpen(constantUsersPerSec(USERS).during(DURATION)),
                         getOwnersScn.injectOpen(constantUsersPerSec(USERS).during(DURATION)))
                 .protocols(httpProtocol);

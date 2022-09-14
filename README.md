@@ -22,7 +22,7 @@ mvn clean gatling:test
 
 ### Running specific simulation:
 ```
-mvn clean gatling:test -Dsimulation.class=simulations.PetClinicSimulation
+mvn clean gatling:test -Dgatling.simulationClass=simulations.OwnersSimulation
 ```
 ### Running with different config (new rows added for readability):
 ```
