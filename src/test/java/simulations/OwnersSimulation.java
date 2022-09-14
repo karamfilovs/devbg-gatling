@@ -46,7 +46,7 @@ public class OwnersSimulation extends Simulation {
             .get(OWNERS_ENDPOINT));
 
 
-    ChainBuilder createOwnerReq = CoreDsl.feed(csv("data/owners.csv").circular())
+    ChainBuilder createOwnerReq = feed(csv("data/owners.csv").random())
             .exec(http("Create owner")
                     .post(OWNERS_ENDPOINT)
                     .body(StringBody(GSON.toJson(Owner.builder()
@@ -59,10 +59,11 @@ public class OwnersSimulation extends Simulation {
                     .check(status().is(201))
                     .check(jsonPath("$.id").saveAs("ownerId")));
 
-    ChainBuilder updateOwnerReq = CoreDsl.exec(http("Update owner")
-            .put(OWNERS_ENDPOINT + "/#{ownerId}").
-            body(StringBody(GSON.toJson(Owner.builder()
-                    .firstName("Alex")
+    ChainBuilder updateOwnerReq = feed(firstNameFeeder)
+            .exec(http("Update owner")
+            .put(OWNERS_ENDPOINT + "/#{ownerId}")
+            .body(StringBody(GSON.toJson(Owner.builder()
+                    .firstName("#{firstName}")
                     .lastName("Updated")
                     .telephone("1231234123")
                     .city("Sofia")
@@ -85,9 +86,11 @@ public class OwnersSimulation extends Simulation {
             .exec(createOwnerReq, updateOwnerReq, getLatestOwnerReq, deleteOwnerReq);
 
 
-    public OwnersSimulation() {
-        this.setUp(createOwnerScenario.injectOpen(constantUsersPerSec(USERS).during(DURATION)),
+   {
+        setUp(createOwnerScenario.injectOpen(constantUsersPerSec(USERS).during(DURATION)),
                         getOwnersScn.injectOpen(constantUsersPerSec(USERS).during(DURATION)))
+                .assertions(global().responseTime().max().lt(500),
+                        global().successfulRequests().percent().gt(95.0))
                 .protocols(httpProtocol);
     }
 
